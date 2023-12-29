@@ -12,6 +12,8 @@ typedef struct {
     bool log_file;
     char *log_file_name;
     char *file;
+    bool machine;
+    char *machine_name;
 } Param;
 
 extern Param param;

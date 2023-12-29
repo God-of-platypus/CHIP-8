@@ -2,20 +2,32 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include <err.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define STACK_SIZE          (32u)
-#define MEMORY_SIZE         (4096u)
-#define VARIABLE_REGISTER   (16u)
-#define DISPLAY_WIDTH       (64u)
-#define DISPLAY_HEIGTH      (32u)
+#include "screen.h"
+#include "param.h"
+
+#define STACK_SIZE              (32u)
+#define MEMORY_SIZE             (4096u)
+#define VARIABLE_REGISTER       (16u)
+#define DISPLAY_WIDTH           (64u)
+#define DISPLAY_HEIGTH          (32u)
+
+#define FIRST_NIBBLE(A)         (((A) & 0xF000) >> 12)
+#define SECOND_NIBBLE(A)        (((A) & 0x0F00) >> 8)
+#define THIRD_NIBBLE(A)         (((A) & 0x00F0) >> 4)
+#define FOURTH_NIBBLE(A)        ((A) & 0x000F)
+
+#define LAST_THREE_NIBBLE(A)    ((A) & 0x0FFF)
+#define LAST_BYTE(A)            ((A) & 0x00FF)
 
 typedef struct {
-    int8_t memory[MEMORY_SIZE];
-    int8_t V[VARIABLE_REGISTER];
+    uint8_t memory[MEMORY_SIZE];
+    uint8_t V[VARIABLE_REGISTER];
     uint16_t pc;                                    /*Program Counter*/
     uint16_t I;                                     /*Index register*/
     uint8_t delay_timer;
@@ -49,3 +61,7 @@ CHIP8 *CHIP8_init(void);
 void CHIP8_free(CHIP8 *chip8);
 
 uint8_t CHIP8_load(CHIP8 *chip8, char *file_name);
+
+uint16_t CHIP8_fetch(CHIP8 *chip8);
+
+void CHIP8_exec(CHIP8 *chip8, uint16_t code);
