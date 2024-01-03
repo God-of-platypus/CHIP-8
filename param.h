@@ -6,7 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
+typedef struct
+{
     bool help;
     bool log;
     bool log_file;

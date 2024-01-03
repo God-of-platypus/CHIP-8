@@ -1,18 +1,21 @@
 #include "chip8.h"
 
-static void font_init(uint8_t *array) {
-    
+bool waitingForInput = false;
+bool draw = false;
+
+static void font_init(uint8_t *array)
+{
     array[ZERO] = 0xF0u;
     array[ZERO + 1u] = 0x90u;
     array[ZERO + 2u] = 0x90u;
     array[ZERO + 3u] = 0x90u;
     array[ZERO + 4u] = 0xF0u;
-    
+
     array[ONE] = 0x20u;
     array[ONE + 1u] = 0x60u;
     array[ONE + 2u] = 0x20u;
     array[ONE + 3u] = 0x20u;
-    array[ONE + 4u] = 0xF0u;
+    array[ONE + 4u] = 0x70u;
 
     array[TWO] = 0xF0;
     array[TWO + 1u] = 0x10u;
@@ -79,13 +82,13 @@ static void font_init(uint8_t *array) {
     array[C + 2u] = 0x80u;
     array[C + 3u] = 0x80u;
     array[C + 4u] = 0xF0u;
-    
+
     array[D] = 0xE0u;
     array[D + 1u] = 0x90u;
     array[D + 2u] = 0x90u;
     array[D + 3u] = 0x90u;
     array[D + 4u] = 0xF0u;
-    
+
     array[E] = 0xF0u;
     array[E + 1u] = 0x80u;
     array[E + 2u] = 0xF0u;
@@ -96,120 +99,209 @@ static void font_init(uint8_t *array) {
     array[F + 1u] = 0x80u;
     array[F + 2u] = 0xF0u;
     array[F + 3u] = 0x80u;
-    array[F + 4u] = 0x80u; 
+    array[F + 4u] = 0x80u;
 }
 
-static void CHIP8_clear_display(CHIP8 *chip8) {
-    for(uint8_t i = 0; i < DISPLAY_HEIGTH; i++) {
-        for(uint8_t j = 0; j < DISPLAY_WIDTH; j++) {
+static void CHIP8_clear_display(CHIP8 *chip8)
+{
+    for (uint8_t i = 0; i < DISPLAY_HEIGTH; i++)
+    {
+        for (uint8_t j = 0; j < DISPLAY_WIDTH; j++)
+        {
             chip8->display[i][j] = false;
-        } 
+        }
     }
+    draw = true;
 }
 
-static void CHIP8_ALU(CHIP8 *chip8, uint16_t code) {
+static void CHIP8_ALU(CHIP8 *chip8, uint16_t code)
+{
     uint8_t var1;
     uint8_t var2;
     uint8_t var3;
-    switch (FOURTH_NIBBLE(code)) {
-        case 0x0:
+    switch (FOURTH_NIBBLE(code))
+    {
+    case 0x0:
+        chip8->V[SECOND_NIBBLE(code)] = chip8->V[THIRD_NIBBLE(code)];
+        break;
+    case 0x1:
+        chip8->V[SECOND_NIBBLE(code)] |= chip8->V[THIRD_NIBBLE(code)];
+        break;
+    case 0x2:
+        chip8->V[SECOND_NIBBLE(code)] &= chip8->V[THIRD_NIBBLE(code)];
+        break;
+    case 0x3:
+        chip8->V[SECOND_NIBBLE(code)] ^= chip8->V[THIRD_NIBBLE(code)];
+        break;
+    case 0x4:
+        var1 = chip8->V[SECOND_NIBBLE(code)];
+        var2 = chip8->V[THIRD_NIBBLE(code)];
+        var3 = var1 + var2;
+        if (var3 < var1 || var3 < var2)
+        {
+            chip8->V[0xF] = 1;
+        }
+        else
+        {
+            chip8->V[0xF] = 0;
+        }
+        chip8->V[SECOND_NIBBLE(code)] = var3;
+        break;
+    case 0x5:
+        var1 = chip8->V[SECOND_NIBBLE(code)];
+        var2 = chip8->V[THIRD_NIBBLE(code)];
+        chip8->V[0xF] = var1 >= var2;
+        chip8->V[SECOND_NIBBLE(code)] = var1 - var2;
+        break;
+    case 0x6:
+        if (strcmp(param.machine_name, "COSMAC") == 0)
+        {
             chip8->V[SECOND_NIBBLE(code)] = chip8->V[THIRD_NIBBLE(code)];
-            break;
-        case 0x1:
-            chip8->V[SECOND_NIBBLE(code)] |= chip8->V[THIRD_NIBBLE(code)];
-            break;
-        case 0x2:
-            chip8->V[SECOND_NIBBLE(code)] &= chip8->V[THIRD_NIBBLE(code)];
-            break;
-        case 0x3:
-            chip8->V[SECOND_NIBBLE(code)] ^= chip8->V[THIRD_NIBBLE(code)];
-            break;
-       case 0x4:
-            var1 = chip8->V[SECOND_NIBBLE(code)];
-            var2 = chip8->V[THIRD_NIBBLE(code)];
-            var3 = var1 + var2;
-            if (var3 < var1 || var3 < var2) {
-                chip8->V[0xF] = 1;
-            } else {
-                chip8->V[0xF] = 0;
-            }
-            chip8->V[SECOND_NIBBLE(code)];
-            break;
-       case 0x5:
-            var1 = chip8->V[SECOND_NIBBLE(code)];
-            var2 = chip8->V[THIRD_NIBBLE(code)];
-            chip8->V[0xF] = var1 >= var2;
-            chip8->V[SECOND_NIBBLE(code)] = var1 - var2;
-            break;
-       case 0x6:
-            if (strcmp(param.machine_name, "COSMAC") == 0) {
-                chip8->V[SECOND_NIBBLE(code)] = chip8->V[THIRD_NIBBLE(code)];
-            }
-            chip8->V[0xF] = 0x1 & chip8->V[SECOND_NIBBLE(code)];
-            chip8->V[SECOND_NIBBLE(code)] = chip8->V[SECOND_NIBBLE(code)] >> 1;
-            break;
-       case 0x7:
-            var1 = chip8->V[SECOND_NIBBLE(code)];
-            var2 = chip8->V[THIRD_NIBBLE(code)];
-            chip8->V[0xF] = var2 >= var1;
-            chip8->V[SECOND_NIBBLE(code)] = var2 - var1;
-            break;
-       case 0xE:
-            if (strcmp(param.machine_name, "COSMAC") == 0) {
-                chip8->V[SECOND_NIBBLE(code)] = chip8->V[THIRD_NIBBLE(code)];
-            }
-            chip8->V[0xF] = 0x80 & chip8->V[SECOND_NIBBLE(code)];
-            chip8->V[SECOND_NIBBLE(code)] = chip8->V[SECOND_NIBBLE(code)] << 1;
-            break;
-        default:
-            err(1, "Unknown command\n");
+        }
+        chip8->V[0xF] = 0x1 & chip8->V[SECOND_NIBBLE(code)];
+        chip8->V[SECOND_NIBBLE(code)] = chip8->V[SECOND_NIBBLE(code)] >> 1;
+        break;
+    case 0x7:
+        var1 = chip8->V[SECOND_NIBBLE(code)];
+        var2 = chip8->V[THIRD_NIBBLE(code)];
+        chip8->V[0xF] = var2 >= var1;
+        chip8->V[SECOND_NIBBLE(code)] = var2 - var1;
+        break;
+    case 0xE:
+        if (strcmp(param.machine_name, "COSMAC") == 0)
+        {
+            chip8->V[SECOND_NIBBLE(code)] = chip8->V[THIRD_NIBBLE(code)];
+        }
+        chip8->V[0xF] = 0x80 & chip8->V[SECOND_NIBBLE(code)];
+        chip8->V[SECOND_NIBBLE(code)] = chip8->V[SECOND_NIBBLE(code)] << 1;
+        break;
+    default:
+        err(1, "Unknown command\n");
     }
 }
 
-static void CHIP8_display(CHIP8 *chip8, uint16_t code) {
+static void CHIP8_display(CHIP8 *chip8, uint16_t code)
+{
     uint8_t x = chip8->V[SECOND_NIBBLE(code)] % DISPLAY_WIDTH;
     uint8_t y = chip8->V[THIRD_NIBBLE(code)] % DISPLAY_HEIGTH;
     uint8_t n = FOURTH_NIBBLE(code);
 
     chip8->V[0xF] = 0;
 
-    for(uint8_t i = 0; i < n && y + i < DISPLAY_HEIGTH; i++) {
+    for (uint8_t i = 0; i < n && y + i < DISPLAY_HEIGTH; i++)
+    {
         uint8_t byte = chip8->memory[chip8->I + i];
-        for (uint8_t j = 7; j >= 0 && x + j < DISPLAY_WIDTH; j++) 
+        for (uint8_t j = 7; j >= 0 && x + j < DISPLAY_WIDTH; j--)
         {
             bool pixel = (bool)(byte >> j & 0x1);
-            if (pixel && chip8->display[y + i][x + j]) {
+            if (pixel && chip8->display[y + i][x + j])
+            {
                 chip8->V[0xF] = 1;
-                SCREEN_UpdatePixel(x + j, y + i, false);
-                chip8->display[y + i][x + j] = false;
-            } else if (pixel && !chip8->display[y+i][x+j]){
-                SCREEN_UpdatePixel(x + j, y + i, pixel);
-                chip8->display[y + i][x + j] = true;
+            }
+            chip8->display[y + i][x++] ^= pixel;
+        }
+        x = chip8->V[SECOND_NIBBLE(code)] % DISPLAY_WIDTH;
+    }
+    draw = true;
+}
+
+static void CHIP8_FFunction(CHIP8 *chip8, uint16_t code)
+{
+    uint16_t tmp = 0;
+    switch (LAST_BYTE(code))
+    {
+    case 0x07:
+        chip8->V[SECOND_NIBBLE(code)] = chip8->delay_timer;
+        break;
+    case 0x15:
+        chip8->delay_timer = chip8->V[SECOND_NIBBLE(code)];
+        break;
+    case 0x18:
+        chip8->sound_timer = chip8->V[SECOND_NIBBLE(code)];
+        break;
+    case 0x1E:
+        chip8->I += chip8->V[SECOND_NIBBLE(code)];
+        if (chip8->I >= 0xFFF)
+        {
+            chip8->V[0xF] = 1;
+        }
+        break;
+    case 0x0A:
+        tmp = 0;
+        for (uint8_t i = 0; i < 16; i++) {
+            if (SCREEN_IsKeyPressed(i)) {
+                tmp = 1;
+                chip8->V[SECOND_NIBBLE(code)] = i;
             }
         }
-    }
-};
 
-CHIP8 *CHIP8_init(void) {
+        if (!tmp) {
+            chip8->pc -= 2;
+        }
+
+        break;
+    case 0x29:
+        chip8->I = ZERO + 0x5 * chip8->V[SECOND_NIBBLE(code)];
+        break;
+    case 0x33:
+        chip8->memory[chip8->I] = chip8->V[SECOND_NIBBLE(code)] / 100;
+        chip8->memory[chip8->I + 1] = (chip8->V[SECOND_NIBBLE(code)] % 100) / 10;
+        chip8->memory[chip8->I + 2] = chip8->V[SECOND_NIBBLE(code)] % 10;
+        break;
+    case 0x55:
+        if (strcmp(param.machine_name, "COSMAC") == 0) {
+            for (uint8_t i = 0; i <= SECOND_NIBBLE(code); i++) {
+                chip8->memory[chip8->I++] = chip8->V[i]; 
+            }
+        } else if (strcmp(param.machine_name,"CHIP-48") == 0) {
+            for (uint8_t i = 0; i <= SECOND_NIBBLE(code); i++) {
+                chip8->memory[chip8->I + i] = chip8->V[i]; 
+            }
+        }     
+        break;
+    case 0x65:
+        if (strcmp(param.machine_name, "COSMAC") == 0) {
+            for (uint8_t i = 0; i <= SECOND_NIBBLE(code); i++) {
+                chip8->V[i] = chip8->memory[chip8->I++]; 
+            }
+        } else if (strcmp(param.machine_name,"CHIP-48") == 0) {
+            for (uint8_t i = 0; i <= SECOND_NIBBLE(code); i++) {
+                chip8->V[i] = chip8->memory[chip8->I + i]; 
+            }
+        }
+        break;
+    default:
+        err(1, "Unknown command\n");
+    }
+}
+
+CHIP8 *CHIP8_init(void)
+{
     CHIP8 *chip8 = malloc(sizeof(CHIP8));
-    if (!chip8) {
+    if (!chip8)
+    {
         return NULL;
     }
 
-    for(uint16_t i = 0; i < MEMORY_SIZE; i++) {
+    for (uint16_t i = 0; i < MEMORY_SIZE; i++)
+    {
         chip8->memory[i] = 0x00u;
     }
 
-    for(uint8_t i = 0; i < VARIABLE_REGISTER; i++) {
+    for (uint8_t i = 0; i < VARIABLE_REGISTER; i++)
+    {
         chip8->V[i] = 0x00u;
     }
 
-    for(uint8_t i = 0; i < STACK_SIZE; i++) {
+    for (uint8_t i = 0; i < STACK_SIZE; i++)
+    {
         chip8->stack[i] = 0x00u;
     }
 
-    for(uint8_t i = 0; i < DISPLAY_HEIGTH; i++) {
-        for(uint8_t j = 0; j < DISPLAY_WIDTH; j++) {
+    for (uint8_t i = 0; i < DISPLAY_HEIGTH; i++)
+    {
+        for (uint8_t j = 0; j < DISPLAY_WIDTH; j++)
+        {
             chip8->display[i][j] = false;
         }
     }
@@ -225,105 +317,172 @@ CHIP8 *CHIP8_init(void) {
     return chip8;
 }
 
-void CHIP8_free(CHIP8 *chip8) {
+void CHIP8_free(CHIP8 *chip8)
+{
     free(chip8);
 }
 
-uint8_t CHIP8_load(CHIP8 *chip8, char *file_name) {
-    FILE *file = fopen(file_name, "r");
-    if (!file) {
+uint8_t CHIP8_load(CHIP8 *chip8, char *file_name)
+{
+    FILE *file = fopen(file_name, "rb");
+    if (!file)
+    {
         return 1;
-    }    
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t nread;
-	while ((nread = getline(&line, &len, file)) != -1) {
-        uint16_t i = 0;
-        while(line[i] != '\n' && line[i] != '\0') {
-            if (chip8->pc >= MEMORY_SIZE) {
-                free(line);
-                fclose(file);
-                return 2;
-            }
-            chip8->memory[chip8->pc++] = line[i++];
-        }
-	}
-    chip8->pc = 0x200;
-    free(line);
+    
+    }	
+    fseek(file, 0, SEEK_END);
+	int size = ftell(file); 
+	fseek(file, 0 ,SEEK_SET);
+
+	fread(chip8->memory+0x200,sizeof(uint16_t),size,file);
     fclose(file);
     return 0;
 }
 
-uint16_t CHIP8_fetch(CHIP8 *chip8) {
-    if (chip8->pc >=  MEMORY_SIZE - 1) {
+uint16_t CHIP8_fetch(CHIP8 *chip8)
+{
+    if (chip8->pc >= MEMORY_SIZE - 1)
+    {
         err(1, "Tried to acces memory out of bound\n");
     }
-    uint16_t result = (chip8->memory[chip8->pc++] << 8) & chip8->memory[chip8->pc++];
+    uint16_t result =
+        (chip8->memory[chip8->pc] << 8) | chip8->memory[chip8->pc + 1];
+    chip8->pc += 2;
+    return result;
 }
 
-void CHIP8_exec(CHIP8 *chip8, uint16_t code) {
-    if (code == 0x00E0) {
+void CHIP8_exec(CHIP8 *chip8, uint16_t code)
+{
+    if (code == 0x00E0)
+    {
         CHIP8_clear_display(chip8);
+        draw = true;
         return;
-    } else if (FIRST_NIBBLE(code) == 0x1) {
+    }
+    else if (FIRST_NIBBLE(code) == 0x1)
+    {
         chip8->pc = LAST_THREE_NIBBLE(code);
-        return; 
-    } else if (FIRST_NIBBLE(code) == 0x2) {
-        if (chip8->stack_pos == STACK_SIZE - 1) {
-            err(1,"Stack overflow\n");
+        return;
+    }
+    else if (FIRST_NIBBLE(code) == 0x2)
+    {
+        if (chip8->stack_pos == STACK_SIZE - 1)
+        {
+            err(1, "Stack overflow\n");
         }
-        chip8->stack[chip8->stack_pos++] = chip8->pc;
+        chip8->stack[chip8->stack_pos] = chip8->pc;
+        ++chip8->stack_pos;
         chip8->pc = LAST_THREE_NIBBLE(code);
-    } else if (code == 0x00EE) {
-        if (chip8->stack_pos == 0) {
+    }
+    else if (code == 0x00EE)
+    {
+        if (chip8->stack_pos == 0)
+        {
             err(1, "Stack Underflow\n");
         }
-        chip8->pc = chip8->stack[chip8->stack_pos--];
-    } else if (FIRST_NIBBLE(code) == 0x3) {
+        chip8->pc = chip8->stack[--chip8->stack_pos];
+    }
+    else if (FIRST_NIBBLE(code) == 0x3)
+    {
         uint8_t compare1 = chip8->V[SECOND_NIBBLE(code)];
         uint8_t compare2 = LAST_BYTE(code);
-        if (compare1 == compare2) {
+        if (compare1 == compare2)
+        {
             chip8->pc += 2;
         }
-    } else if (FIRST_NIBBLE(code) == 0x4) {
+    }
+    else if (FIRST_NIBBLE(code) == 0x4)
+    {
         uint8_t compare1 = chip8->V[SECOND_NIBBLE(code)];
         uint8_t compare2 = LAST_BYTE(code);
-        if (compare1 != compare2) {
+        if (compare1 != compare2)
+        {
             chip8->pc += 2;
         }
-    } else if (FIRST_NIBBLE(code) == 0x5) {
+    }
+    else if (FIRST_NIBBLE(code) == 0x5)
+    {
         uint8_t compare1 = chip8->V[SECOND_NIBBLE(code)];
         uint8_t compare2 = chip8->V[THIRD_NIBBLE(code)];
-        if (compare1 == compare2) {
+        if (compare1 == compare2)
+        {
             chip8->pc += 2;
         }
-    } else if (FIRST_NIBBLE(code) == 0x9) {
+    }
+    else if (FIRST_NIBBLE(code) == 0x9)
+    {
         uint8_t compare1 = chip8->V[SECOND_NIBBLE(code)];
         uint8_t compare2 = chip8->V[THIRD_NIBBLE(code)];
-        if (compare1 != compare2) {
+        if (compare1 != compare2)
+        {
             chip8->pc += 2;
         }
-    } else if (FIRST_NIBBLE(code) == 0x6) {
+    }
+    else if (FIRST_NIBBLE(code) == 0x6)
+    {
         chip8->V[SECOND_NIBBLE(code)] = LAST_BYTE(code);
-    } else if (FIRST_NIBBLE(code) == 0x7) {
+    }
+    else if (FIRST_NIBBLE(code) == 0x7)
+    {
         chip8->V[SECOND_NIBBLE(code)] += LAST_BYTE(code);
-    } else if (FIRST_NIBBLE(code) == 0x8) {
+    }
+    else if (FIRST_NIBBLE(code) == 0x8)
+    {
         CHIP8_ALU(chip8, code);
-    } else if (FIRST_NIBBLE(code) == 0xA) {
+    }
+    else if (FIRST_NIBBLE(code) == 0xA)
+    {
         chip8->I = LAST_THREE_NIBBLE(code);
-    } else if (FIRST_NIBBLE(code) == 0xB) {
+    }
+    else if (FIRST_NIBBLE(code) == 0xB)
+    {
         chip8->pc = LAST_THREE_NIBBLE(code);
-        if (strcmp(param.machine_name, "COSMAC") == 0) {
+        if (strcmp(param.machine_name, "COSMAC") == 0)
+        {
             chip8->pc += chip8->V[0];
-        } else {
+        }
+        else
+        {
             chip8->pc += chip8->V[SECOND_NIBBLE(code)];
         }
-    } else if (FIRST_NIBBLE(code) == 0xC) {
+    }
+    else if (FIRST_NIBBLE(code) == 0xC)
+    {
         uint8_t res = rand() % 0xFF;
         chip8->V[SECOND_NIBBLE(code)] = res & LAST_BYTE(code);
-    } else if (FIRST_NIBBLE(code) == 0xD) {
+    }
+    else if (FIRST_NIBBLE(code) == 0xD)
+    {
         CHIP8_display(chip8, code);
-    } else {
-        err(1, "Unknown command\n");
+    }
+    else if (FIRST_NIBBLE(code) == 0xE)
+    {
+        uint8_t key = SECOND_NIBBLE(code);
+        if (LAST_BYTE(code) == 0x9E)
+        {
+            if (SCREEN_IsKeyPressed(key))
+            {
+                chip8->pc += 2;
+            }
+        }
+        else if (LAST_BYTE(code) == 0xA1)
+        {
+            if (!SCREEN_IsKeyPressed(key))
+            {
+                chip8->pc += 2;
+            }
+        }
+        else
+        {
+            err(1, "Unknown command\n");
+        }
+    }
+    else if (FIRST_NIBBLE(code) == 0xF)
+    {
+        CHIP8_FFunction(chip8, code);
+    }
+    else
+    {
+        err(1, "Unknown command %x\n", code);
     }
 }
