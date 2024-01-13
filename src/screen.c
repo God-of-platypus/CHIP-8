@@ -87,6 +87,10 @@ void SCREEN_MainLoop(CHIP8 *chip8)
     static const uint16_t UPDATE_INTERVAL_MS = 1000 / 60;
     uint32_t lastUpdate = SDL_GetTicks();
     uint32_t currentUpdate = 0;
+    FILE *file = NULL;
+    if (param.log_file) {
+        file = fopen(param.log_file_name, "a");
+    }
     while (!quit)
     {
         // Handle events
@@ -216,10 +220,17 @@ void SCREEN_MainLoop(CHIP8 *chip8)
 
         uint16_t opcode = CHIP8_fetch(chip8);
 
-        printf("Current opcode: %X\n", opcode);
-        printf("Current I: %X\n", chip8->I);
-        printf("Current PC: %X\n", chip8->pc);
 
+        if (param.log_file) {
+            fprintf(file,"Current opcode: %X\n", opcode);
+            fprintf(file,"Current I: %X\n", chip8->I);
+            fprintf(file,"Current PC: %X\n", chip8->pc);
+        }
+        if (param.log) {
+            printf(file,"Current opcode: %X\n", opcode);
+            printf(file,"Current I: %X\n", chip8->I);
+            printf(file,"Current PC: %X\n", chip8->pc);
+        }
         CHIP8_exec(chip8, opcode);
         if (draw)
         {
